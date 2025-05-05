@@ -1,4 +1,6 @@
-﻿namespace Neon.CRM.WebApp.Data.Models;
+﻿using System.ComponentModel.DataAnnotations.Schema;
+
+namespace Neon.CRM.WebApp.Data.Models;
 
 public class Customer
 {
@@ -13,4 +15,8 @@ public class Customer
     public string? AgentId { get; set; }
 
     public ICollection<Booking> Bookings { get; set; } = [];
+
+    [NotMapped]
+    public string FullName => $"{FirstName} {LastName}".Trim();
+
 }
