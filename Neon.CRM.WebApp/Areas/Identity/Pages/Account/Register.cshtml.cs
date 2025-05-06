@@ -9,6 +9,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.WebUtilities;
 using Neon.CRM.WebApp.Data.Models;
+using Neon.CRM.WebApp.Helpers;
+using Neon.CRM.WebApp.Services;
 using System.ComponentModel.DataAnnotations;
 using System.Text;
 using System.Text.Encodings.Web;
@@ -23,13 +25,16 @@ namespace Neon.CRM.WebApp.Areas.Identity.Pages.Account
         private readonly IUserEmailStore<Agent> _emailStore;
         private readonly ILogger<RegisterModel> _logger;
         private readonly IEmailSender _emailSender;
+        private readonly INeonService _neonService;
+        private readonly IConfiguration _configuration;
 
         public RegisterModel(
             UserManager<Agent> userManager,
             IUserStore<Agent> userStore,
             SignInManager<Agent> signInManager,
             ILogger<RegisterModel> logger,
-            IEmailSender emailSender)
+            IEmailSender emailSender,
+            INeonService neonService, IConfiguration configuration)
         {
             _userManager = userManager;
             _userStore = userStore;
@@ -37,6 +42,8 @@ namespace Neon.CRM.WebApp.Areas.Identity.Pages.Account
             _signInManager = signInManager;
             _logger = logger;
             _emailSender = emailSender;
+            this._neonService = neonService;
+            this._configuration = configuration;
         }
 
         /// <summary>
@@ -137,6 +144,19 @@ namespace Neon.CRM.WebApp.Areas.Identity.Pages.Account
 
                     await _emailSender.SendEmailAsync(Input.Email, "Confirm your email",
                         $"Please confirm your account by <a href='{HtmlEncoder.Default.Encode(callbackUrl)}'>clicking here</a>.");
+
+                    // Create a branch in Neon for the new user
+                    var tenantName = userId;
+                    var branchResponse = await _neonService.CreateBranchAsync(tenantName);
+                    var connectionString = $"Host={branchResponse.connection_uris[0].connection_parameters.pooler_host};Database=neondb;Username=neondb_owner;Password=npg_rRVLNbniDs17";
+
+                    // TODO: Encrypt connection string before storage
+
+                    // Update the user's connection string
+                    user.TenantConnectionString = EncryptionHelper.Encrypt(connectionString, _configuration["ENCRYPTION_KEY"]);
+                    
+
+                    await _userManager.UpdateAsync(user);
 
                     if (_userManager.Options.SignIn.RequireConfirmedAccount)
                     {

@@ -1,35 +1,20 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Neon.CRM.WebApp.Data;
 using Neon.CRM.WebApp.Data.Models;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Security.Claims;
+using System.Threading.Tasks;
 
 namespace Neon.CRM.WebApp.Pages.Customers
 {
-    public class CreateModel : PageModel
+    public class CreateModel(TenantDbContextFactory tenantDbContextFactory) : PageModel
     {
-        private readonly Neon.CRM.WebApp.Data.ApplicationDbContext _context;
-
-        public CreateModel(Neon.CRM.WebApp.Data.ApplicationDbContext context)
-        {
-            _context = context;
-        }
-
         public IActionResult OnGet()
         {
-            var agents = _context.Users
-                .Select(q => 
-                    new { 
-                        q.Id, 
-                        q.FullName
-                    }
-                )
-                .ToList();
-            ViewData["AgentId"] = new SelectList(agents, "Id", "FullName");
             return Page();
         }
 
@@ -39,11 +24,14 @@ namespace Neon.CRM.WebApp.Pages.Customers
         // For more information, see https://aka.ms/RazorPagesCRUD.
         public async Task<IActionResult> OnPostAsync()
         {
+            string userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            Customer.AgentId = userId;
             if (!ModelState.IsValid)
             {
                 return Page();
             }
 
+            var _context = tenantDbContextFactory.Create();
             _context.Customers.Add(Customer);
             await _context.SaveChangesAsync();
 

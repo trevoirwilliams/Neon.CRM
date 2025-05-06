@@ -8,6 +8,7 @@ public class Agent : IdentityUser
 {
     public string? FirstName { get; set; }
     public string? LastName { get; set; }
+    public string? TenantConnectionString { get; set; }
 
     // Navigation property
     public ICollection<Customer> Customers { get; set; } = [];

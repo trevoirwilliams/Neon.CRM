@@ -15,19 +15,13 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Extensions.Logging;
 using Neon.CRM.WebApp.Data.Models;
+using Neon.CRM.WebApp.Data;
+using Microsoft.EntityFrameworkCore;
 
 namespace Neon.CRM.WebApp.Areas.Identity.Pages.Account
 {
-    public class LoginModel : PageModel
+    public class LoginModel(UserManager<Agent> _userManager, SignInManager<Agent> signInManager, ILogger<LoginModel> logger, TenantDbContextFactory _tenantDbContextFactory) : PageModel
     {
-        private readonly SignInManager<Agent> _signInManager;
-        private readonly ILogger<LoginModel> _logger;
-
-        public LoginModel(SignInManager<Agent> signInManager, ILogger<LoginModel> logger)
-        {
-            _signInManager = signInManager;
-            _logger = logger;
-        }
 
         /// <summary>
         ///     This API supports the ASP.NET Core Identity default UI infrastructure and is not intended to be used
@@ -97,7 +91,7 @@ namespace Neon.CRM.WebApp.Areas.Identity.Pages.Account
             // Clear the existing external cookie to ensure a clean login process
             await HttpContext.SignOutAsync(IdentityConstants.ExternalScheme);
 
-            ExternalLogins = (await _signInManager.GetExternalAuthenticationSchemesAsync()).ToList();
+            ExternalLogins = (await signInManager.GetExternalAuthenticationSchemesAsync()).ToList();
 
             ReturnUrl = returnUrl;
         }
@@ -106,16 +100,29 @@ namespace Neon.CRM.WebApp.Areas.Identity.Pages.Account
         {
             returnUrl ??= Url.Content("~/");
 
-            ExternalLogins = (await _signInManager.GetExternalAuthenticationSchemesAsync()).ToList();
+            ExternalLogins = (await signInManager.GetExternalAuthenticationSchemesAsync()).ToList();
 
             if (ModelState.IsValid)
             {
                 // This doesn't count login failures towards account lockout
                 // To enable password failures to trigger account lockout, set lockoutOnFailure: true
-                var result = await _signInManager.PasswordSignInAsync(Input.Email, Input.Password, Input.RememberMe, lockoutOnFailure: false);
+                var result = await signInManager.PasswordSignInAsync(Input.Email, Input.Password, Input.RememberMe, lockoutOnFailure: false);
                 if (result.Succeeded)
                 {
-                    _logger.LogInformation("User logged in.");
+                    logger.LogInformation("User logged in.");
+
+                    // Create user in tenant if not exists 
+                    var user = await _userManager.FindByEmailAsync(Input.Email);
+                    var context = _tenantDbContextFactory.Create();
+
+                    var tenantUser = await context.Users.FirstOrDefaultAsync(u => u.Email == Input.Email);
+                    if (tenantUser == null)
+                    {
+                        tenantUser = user;
+                        context.Users.Add(tenantUser);
+                        await context.SaveChangesAsync();
+                    }
+
                     return LocalRedirect(returnUrl);
                 }
                 if (result.RequiresTwoFactor)
@@ -124,7 +131,7 @@ namespace Neon.CRM.WebApp.Areas.Identity.Pages.Account
                 }
                 if (result.IsLockedOut)
                 {
-                    _logger.LogWarning("User account locked out.");
+                    logger.LogWarning("User account locked out.");
                     return RedirectToPage("./Lockout");
                 }
                 else
